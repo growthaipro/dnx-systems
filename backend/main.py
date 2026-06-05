@@ -1,41 +1,34 @@
-"""
-Main FastAPI application entry point
-"""
+import logging
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from contextlib import asynccontextmanager
-import logging
+from fastapi.responses import JSONResponse
 from core.config import settings
-from core.database import engine, Base
-from api.routes import users, analytics, leads, customers, businesses
-from core.logging_config import setup_logging
+from core.database import init_db, Base, engine
 
-# Setup logging
-setup_logging()
 logger = logging.getLogger(__name__)
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Manage application lifecycle"""
     # Startup
-    logger.info("Starting DNX Systems application...")
-    Base.metadata.create_all(bind=engine)
+    logger.info(f"Starting {settings.APP_NAME}...")
+    init_db()
     yield
     # Shutdown
-    logger.info("Shutting down DNX Systems application...")
+    logger.info(f"Shutting down {settings.APP_NAME}...")
 
-
-# Create FastAPI app
 app = FastAPI(
-    title="DNX Systems API",
-    description="Growth AI Pro - DNX Systems Management API",
-    version="1.0.0",
+    title=settings.APP_NAME,
+    description="Next-generation Autonomous Business Ecosystem",
+    version=settings.VERSION,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
     lifespan=lifespan
 )
 
-# Add CORS middleware
+# CORS Middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
@@ -44,59 +37,36 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Add trusted host middleware
+# Trusted Host Middleware
 app.add_middleware(
     TrustedHostMiddleware,
-    allowed_hosts=settings.ALLOWED_HOSTS
+    allowed_hosts=["localhost", "127.0.0.1", "*.ngrok.io"]
 )
 
+# Health Check
+@app.get("/health")
+async def health():
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": "healthy",
+            "service": settings.APP_NAME,
+            "version": settings.VERSION
+        }
+    )
 
-# Include routers
-app.include_router(
-    users.router,
-    prefix="/api/v1/users",
-    tags=["users"]
-)
-app.include_router(
-    analytics.router,
-    prefix="/api/v1/analytics",
-    tags=["analytics"]
-)
-app.include_router(
-    leads.router,
-    prefix="/api/v1/leads",
-    tags=["leads"]
-)
-app.include_router(
-    customers.router,
-    prefix="/api/v1/customers",
-    tags=["customers"]
-)
-app.include_router(
-    businesses.router,
-    prefix="/api/v1/businesses",
-    tags=["businesses"]
-)
-
-
+# Root endpoint
 @app.get("/")
 async def root():
-    """Root endpoint"""
-    return {
-        "message": "Welcome to DNX Systems API",
-        "version": "1.0.0",
-        "docs": "/docs"
-    }
-
-
-@app.get("/health")
-async def health_check():
-    """Health check endpoint"""
-    return {
-        "status": "healthy",
-        "service": "DNX Systems API"
-    }
-
+    return JSONResponse(
+        status_code=200,
+        content={
+            "message": f"Welcome to {settings.APP_NAME}",
+            "version": settings.VERSION,
+            "environment": settings.ENVIRONMENT,
+            "docs": "/docs"
+        }
+    )
 
 if __name__ == "__main__":
     import uvicorn
@@ -105,5 +75,5 @@ if __name__ == "__main__":
         host=settings.HOST,
         port=settings.PORT,
         reload=settings.DEBUG,
-        log_level=settings.LOG_LEVEL
+        log_level=settings.LOG_LEVEL.lower()
     )
